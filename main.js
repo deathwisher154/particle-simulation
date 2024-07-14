@@ -278,18 +278,22 @@ function initializeSimulation(resetCamera = false) {
         scene.add(create3DGrid(params.gridSize, params.gridDivisions));
     }
 
-    particleSphere = new THREE.SphereGeometry(params.sphereSize, 32, 32);
-    const particleMaterial = new THREE.MeshStandardMaterial({ color: params.particleColor });
-    particleSphere = new THREE.Mesh(particleSphere, particleMaterial);
-    particleSphere.castShadow = true;
-    particleSphere.receiveShadow = true;
-    scene.add(particleSphere);
+    if (params.showSphere) {
+        const particleGeometry = new THREE.SphereGeometry(params.sphereSize, 32, 32);
+        const particleMaterial = new THREE.MeshStandardMaterial({ color: params.particleColor });
+        particleSphere = new THREE.Mesh(particleGeometry, particleMaterial);
+        particleSphere.castShadow = true;
+        particleSphere.receiveShadow = true;
+        scene.add(particleSphere);
+    }
 
-    const trailGeometry = new THREE.BufferGeometry();
-    trailGeometry.setAttribute('position', new THREE.Float32BufferAttribute([], 3));
-    const trailMaterial = new THREE.LineBasicMaterial({ color: params.trailColor });
-    trail = new THREE.Line(trailGeometry, trailMaterial);
-    scene.add(trail);
+    if (params.showTrail) {
+        const trailGeometry = new THREE.BufferGeometry();
+        trailGeometry.setAttribute('position', new THREE.Float32BufferAttribute([], 3));
+        const trailMaterial = new THREE.LineBasicMaterial({ color: params.trailColor });
+        trail = new THREE.Line(trailGeometry, trailMaterial);
+        scene.add(trail);
+    }
 
     r = [0.0, 0.0, 0.0];
     v = [params.vx, params.vy, params.vz];
@@ -337,6 +341,8 @@ document.addEventListener('keydown', (event) => {
         isPaused = !isPaused;
     }
 });
+
+
 
 
 
