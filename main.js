@@ -1,354 +1,348 @@
+
+
 import * as THREE from 'https://cdn.skypack.dev/three@0.128.0';
 import { OrbitControls } from 'https://cdn.skypack.dev/three@0.128.0/examples/jsm/controls/OrbitControls.js';
 import { GUI } from 'https://cdn.skypack.dev/dat.gui@0.7.7';
-import { cross, divide, multiply, add, subtract } from 'https://cdn.skypack.dev/mathjs@9.5.1';
+import { EffectComposer } from 'https://cdn.skypack.dev/three@0.128.0/examples/jsm/postprocessing/EffectComposer.js';
+import { RenderPass } from 'https://cdn.skypack.dev/three@0.128.0/examples/jsm/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'https://cdn.skypack.dev/three@0.128.0/examples/jsm/postprocessing/UnrealBloomPass.js';
+import { SMAAPass } from 'https://cdn.skypack.dev/three@0.128.0/examples/jsm/postprocessing/SMAAPass.js';
+import Stats from 'https://cdn.skypack.dev/stats.js';
+import { cross, add, multiply, divide } from 'https://cdn.skypack.dev/mathjs@9.5.1';
 
-function derivatives(r, v, E, B, q, m) {
-    const gravity = [params.gravityX, params.gravityY, params.gravityZ];
-    const externalForce = [params.externalForceX, params.externalForceY, params.externalForceZ];
-    const velocityMagnitude = Math.sqrt(v[0]**2 + v[1]**2 + v[2]**2);
-    const frictionForce = velocityMagnitude > 0 ? multiply(-params.friction, v) : [0, 0, 0];
-
-    const lorentzForce = multiply(q, add(E, cross(v, B)));
-    const totalForce = add(add(add(lorentzForce, multiply(m, gravity)), externalForce), frictionForce);
-    const a = divide(totalForce, m);
-
-    return [v, a];
-}
-
-function rungeKutta4(r, v, E, B, q, m, dt) {
-    const k1 = derivatives(r, v, E, B, q, m);
-    const k2 = derivatives(
-        add(r, multiply(k1[0], dt / 2)),
-        add(v, multiply(k1[1], dt / 2)),
-        E, B, q, m
-    );
-    const k3 = derivatives(
-        add(r, multiply(k2[0], dt / 2)),
-        add(v, multiply(k2[1], dt / 2)),
-        E, B, q, m
-    );
-    const k4 = derivatives(
-        add(r, multiply(k3[0], dt)),
-        add(v, multiply(k3[1], dt)),
-        E, B, q, m
-    );
-
-    const dr = multiply(
-        add(
-            add(k1[0], multiply(2, k2[0])),
-            add(multiply(2, k3[0]), k4[0])
-        ),
-        dt / 6
-    );
-    const dv = multiply(
-        add(
-            add(k1[1], multiply(2, k2[1])),
-            add(multiply(2, k3[1]), k4[1])
-        ),
-        dt / 6
-    );
-
-    return [dr, dv];
-}
-
+// Enhanced Configuration
 const params = {
-    q: 1.0,
-    vx: 1.0,
-    vy: 1.0,
-    vz: 1.0,
-    Ex: 0.0,
-    Ey: 0.0,
-    Ez: 0.0,
-    Bx: 0.0,
-    By: 0.0,
-    Bz: 1.0,
-    animationSpeed: 2,
-    particleColor: 'cyan',
-    trailColor: 'yellow',
-    showAxes: true,
-    fontSize: 0.5,
-    fontColor: 'white',
-    axisLabelFontSize: 1.0,
-    axisNumberingDensity: 2,
-    sphereSize: 0.4,
-    backgroundColor: 'black',
-    showSphere: true,
-    showTrail: true,
-    show3DGrid: false,
-    gridSize: 20,
-    gridDivisions: 20,
-    lightIntensity: 1,
-    lightColor: 'white',
-    particleCount: 1,
-    mass: 1.0,
-    radius: 1.0,
-    friction: 0.01,
-    gravityX: 0.0,
-    gravityY: -9.8,
-    gravityZ: 0.0,
-    externalForceX: 0.0,
-    externalForceY: 0.0,
-    externalForceZ: 0.0,
+    // Core Physics
+    simulationType: 'Electromagnetic',
+    particleTypes: ['Sphere', 'Cube', 'Torus', 'Icosahedron'],
+    particleType: 'Sphere',
+    chargeDistribution: 'Uniform',
+    massVariation: 0.2,
+    
+    // Advanced Visualization
+    particleLOD: true,
+    environmentMap: true,
+    bloomEffect: true,
+    motionBlur: false,
+    depthOfField: false,
+    particleGlow: true,
+    starField: true,
+    
+    // Interactive Features
+    particleExplosions: true,
+    touchInteraction: false,
+    particlePainting: false,
+    fieldVisualization3D: true,
+    
+    // Performance
+    instancedRendering: true,
+    maxParticles: 2000,
+    qualityPreset: 'High'
 };
 
-const gui = new GUI();
-const guiFolder = gui.addFolder('Simulation Parameters');
-guiFolder.add(params, 'q', -10, 10, 0.1).onChange(initializeSimulation);
-guiFolder.add(params, 'vx', -10, 10, 0.1).onChange(initializeSimulation);
-guiFolder.add(params, 'vy', -10, 10, 0.1).onChange(initializeSimulation);
-guiFolder.add(params, 'vz', -10, 10, 0.1).onChange(initializeSimulation);
-guiFolder.add(params, 'Ex', -10, 10, 0.1).onChange(initializeSimulation);
-guiFolder.add(params, 'Ey', -10, 10, 0.1).onChange(initializeSimulation);
-guiFolder.add(params, 'Ez', -10, 10, 0.1).onChange(initializeSimulation);
-guiFolder.add(params, 'Bx', -10, 10, 0.1).onChange(initializeSimulation);
-guiFolder.add(params, 'By', -10, 10, 0.1).onChange(initializeSimulation);
-guiFolder.add(params, 'Bz', -10, 10, 0.1).onChange(initializeSimulation);
-guiFolder.add(params, 'animationSpeed', 1, 100, 1);
-guiFolder.add(params, 'particleColor').onChange(initializeSimulation);
-guiFolder.add(params, 'trailColor').onChange(initializeSimulation);
-guiFolder.add(params, 'showAxes').onChange(initializeSimulation);
-guiFolder.add(params, 'fontSize', 0.1, 2, 0.1).onChange(initializeSimulation);
-guiFolder.add(params, 'fontColor').onChange(initializeSimulation);
-guiFolder.add(params, 'axisLabelFontSize', 0.1, 5, 0.1).onChange(initializeSimulation);
-guiFolder.add(params, 'axisNumberingDensity', 1, 50, 1).onChange(initializeSimulation);
-guiFolder.add(params, 'sphereSize', 0.1, 10, 0.1).onChange(initializeSimulation);
-guiFolder.add(params, 'backgroundColor').onChange(initializeSimulation);
-guiFolder.add(params, 'showSphere').onChange(initializeSimulation);
-guiFolder.add(params, 'showTrail').onChange(initializeSimulation);
-guiFolder.add(params, 'show3DGrid').onChange(initializeSimulation);
-guiFolder.add(params, 'gridSize', 1, 100, 1).onChange(initializeSimulation);
-guiFolder.add(params, 'gridDivisions', 1, 100, 1).onChange(initializeSimulation);
-guiFolder.add(params, 'lightIntensity', 0, 10, 0.1).onChange(initializeSimulation);
-guiFolder.add(params, 'lightColor').onChange(initializeSimulation);
-guiFolder.add(params, 'particleCount', 1, 1000, 1).onChange(initializeSimulation);
-guiFolder.add(params, 'mass', 0.1, 10, 0.1).onChange(initializeSimulation);
-guiFolder.add(params, 'radius', 0.1, 10, 0.1).onChange(initializeSimulation);
-guiFolder.add(params, 'friction', 0, 1, 0.01).onChange(initializeSimulation);
-guiFolder.add(params, 'gravityX', -20, 20, 0.1).onChange(initializeSimulation);
-guiFolder.add(params, 'gravityY', -20, 20, 0.1).onChange(initializeSimulation);
-guiFolder.add(params, 'gravityZ', -20, 20, 0.1).onChange(initializeSimulation);
-guiFolder.add(params, 'externalForceX', -20, 20, 0.1).onChange(initializeSimulation);
-guiFolder.add(params, 'externalForceY', -20, 20, 0.1).onChange(initializeSimulation);
-guiFolder.add(params, 'externalForceZ', -20, 20, 0.1).onChange(initializeSimulation);
-guiFolder.add({ reset: () => initializeSimulation(true) }, 'reset').name('Reset Simulation');
+let scene, camera, renderer, composer, controls, stats;
+let particles = [], particlePool = [];
+let gui, particleEditor;
+let lastTouch = new THREE.Vector2();
+let isDragging = false;
 
-const baseDt = 0.01;
-let r = [0.0, 0.0, 0.0];
-let v = [params.vx, params.vy, params.vz];
-let E = [params.Ex, params.Ey, params.Ez];
-let B = [params.Bx, params.By, params.Bz];
-let positions = [];
-
-let particleSphere;
-let trail;
-let isPaused = false;
-
-const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-camera.position.set(0, 0, 20);
-
-const renderer = new THREE.WebGLRenderer({ antialias: true });
-renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.shadowMap.enabled = true;
-document.body.appendChild(renderer.domElement);
-
-const controls = new OrbitControls(camera, renderer.domElement);
-
-const directionalLight = new THREE.DirectionalLight(params.lightColor, params.lightIntensity);
-directionalLight.position.set(5, 5, 5);
-scene.add(directionalLight);
-
-const ambientLight = new THREE.AmbientLight(0x404040);
-scene.add(ambientLight);
-
-function create3DGrid(size, divisions) {
-    const gridHelper = new THREE.Group();
-
-    const gridMaterial = new THREE.LineBasicMaterial({ color: 'gray' });
-    for (let i = -divisions / 2; i <= divisions / 2; i++) {
-        const offset = size / divisions * i;
-        const halfSize = size / 2;
-        const pointsX = [
-            new THREE.Vector3(offset, -halfSize, -halfSize),
-            new THREE.Vector3(offset, halfSize, -halfSize),
-            new THREE.Vector3(offset, halfSize, halfSize),
-            new THREE.Vector3(offset, -halfSize, halfSize),
-            new THREE.Vector3(offset, -halfSize, -halfSize),
-        ];
-        const pointsY = [
-            new THREE.Vector3(-halfSize, offset, -halfSize),
-            new THREE.Vector3(halfSize, offset, -halfSize),
-            new THREE.Vector3(halfSize, offset, halfSize),
-            new THREE.Vector3(-halfSize, offset, halfSize),
-            new THREE.Vector3(-halfSize, offset, -halfSize),
-        ];
-        const pointsZ = [
-            new THREE.Vector3(-halfSize, -halfSize, offset),
-            new THREE.Vector3(halfSize, -halfSize, offset),
-            new THREE.Vector3(halfSize, halfSize, offset),
-            new THREE.Vector3(-halfSize, halfSize, offset),
-            new THREE.Vector3(-halfSize, -halfSize, offset),
-        ];
-
-        const geometryX = new THREE.BufferGeometry().setFromPoints(pointsX);
-        const geometryY = new THREE.BufferGeometry().setFromPoints(pointsY);
-        const geometryZ = new THREE.BufferGeometry().setFromPoints(pointsZ);
-
-        const lineX = new THREE.Line(geometryX, gridMaterial);
-        const lineY = new THREE.Line(geometryY, gridMaterial);
-        const lineZ = new THREE.Line(geometryZ, gridMaterial);
-
-        gridHelper.add(lineX);
-        gridHelper.add(lineY);
-        gridHelper.add(lineZ);
+class AdvancedParticle {
+    constructor() {
+        this.mesh = null;
+        this.velocity = new THREE.Vector3();
+        this.charge = params.q * (1 + (Math.random() - 0.5) * params.massVariation);
+        this.mass = params.mass * (1 + (Math.random() - 0.5) * params.massVariation);
+        this.age = 0;
+        this.lifespan = Infinity;
+        this.trail = [];
+        this.forceFields = [];
     }
-
-    return gridHelper;
 }
 
-function createAxesLabels() {
-    const loader = new THREE.FontLoader();
-    loader.load('https://threejs.org/examples/fonts/helvetiker_regular.typeface.json', function (font) {
-        const createLabel = (text, position, color, size) => {
-            const textGeometry = new THREE.TextGeometry(text, {
-                font: font,
-                size: size,
-                height: 0.1
-            });
-            const textMaterial = new THREE.MeshBasicMaterial({ color: color });
-            const mesh = new THREE.Mesh(textGeometry, textMaterial);
-            mesh.position.set(...position);
-            scene.add(mesh);
-        };
+function initAdvancedScene() {
+    scene = new THREE.Scene();
+    camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 10000);
+    camera.position.set(50, 50, 50);
+    
+    renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.shadowMap.enabled = true;
+    document.body.appendChild(renderer.domElement);
 
-        const density = params.axisNumberingDensity;
-        for (let i = -100; i <= 100; i += density) {
-            createLabel(i.toString(), [i, 0, 0], params.fontColor, params.fontSize);
-            createLabel(i.toString(), [0, i, 0], params.fontColor, params.fontSize);
-            createLabel(i.toString(), [0, 0, i], params.fontColor, params.fontSize);
-        }
+    // Post-processing pipeline
+    composer = new EffectComposer(renderer);
+    const renderPass = new RenderPass(scene, camera);
+    composer.addPass(renderPass);
+    
+    const bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.5, 0.4, 0.85);
+    composer.addPass(bloomPass);
+    
+    const smaaPass = new SMAAPass(window.innerWidth, window.innerHeight);
+    composer.addPass(smaaPass);
 
-        createLabel('X', [11, 0, 0], 'red', params.axisLabelFontSize);
-        createLabel('Y', [0, 11, 0], 'green', params.axisLabelFontSize);
-        createLabel('Z', [0, 0, 11], 'blue', params.axisLabelFontSize);
+    // Environment
+    if(params.environmentMap) {
+        const envTexture = new THREE.CubeTextureLoader()
+            .load([
+                'px.jpg', 'nx.jpg',
+                'py.jpg', 'ny.jpg',
+                'pz.jpg', 'nz.jpg'
+            ], () => scene.background = envTexture);
+    }
+
+    // Interactive lighting
+    const light = new THREE.HemisphereLight(0xffffff, 0x444444, 2);
+    light.position.set(0, 100, 0);
+    scene.add(light);
+}
+
+function createParticleGeometry(type) {
+    switch(type) {
+        case 'Cube': return new THREE.BoxGeometry(1, 1, 1);
+        case 'Torus': return new THREE.TorusGeometry(0.5, 0.2, 16, 100);
+        case 'Icosahedron': return new THREE.IcosahedronGeometry(0.8);
+        default: return new THREE.SphereGeometry(0.5);
+    }
+}
+
+function createParticleMaterial() {
+    return new THREE.MeshPhysicalMaterial({
+        color: 0x00ffff,
+        metalness: 0.5,
+        roughness: 0.1,
+        transparent: true,
+        emissive: 0x00ffff,
+        emissiveIntensity: 0.5
     });
 }
 
-function createAxesLines() {
-    const materialX = new THREE.LineBasicMaterial({ color: 'red' });
-    const materialY = new THREE.LineBasicMaterial({ color: 'green' });
-    const materialZ = new THREE.LineBasicMaterial({ color: 'blue' });
-
-    const pointsX = [new THREE.Vector3(-100, 0, 0), new THREE.Vector3(100, 0, 0)];
-    const pointsY = [new THREE.Vector3(0, -100, 0), new THREE.Vector3(0, 100, 0)];
-    const pointsZ = [new THREE.Vector3(0, 0, -100), new THREE.Vector3(0, 0, 100)];
-
-    const geometryX = new THREE.BufferGeometry().setFromPoints(pointsX);
-    const geometryY = new THREE.BufferGeometry().setFromPoints(pointsY);
-    const geometryZ = new THREE.BufferGeometry().setFromPoints(pointsZ);
-
-    const lineX = new THREE.Line(geometryX, materialX);
-    const lineY = new THREE.Line(geometryY, materialY);
-    const lineZ = new THREE.Line(geometryZ, materialZ);
-
-    scene.add(lineX);
-    scene.add(lineY);
-    scene.add(lineZ);
+function initParticleSystem() {
+    // Create particle pool
+    for(let i = 0; i < params.maxParticles; i++) {
+        const particle = new AdvancedParticle();
+        particle.mesh = new THREE.Mesh(createParticleGeometry(params.particleType), createParticleMaterial());
+        particle.mesh.visible = false;
+        scene.add(particle.mesh);
+        particlePool.push(particle);
+    }
 }
 
-function initializeSimulation(resetCamera = false) {
-    scene.clear();
-    directionalLight.color.set(params.lightColor);
-    directionalLight.intensity = params.lightIntensity;
-    scene.add(directionalLight);
-    scene.add(ambientLight);
-
-    if (resetCamera) {
-        camera.position.set(0, 0, 20);
-        controls.update();
+function spawnParticle(position, velocity) {
+    const particle = particlePool.find(p => !p.mesh.visible);
+    if(particle) {
+        particle.mesh.position.copy(position);
+        particle.velocity.copy(velocity);
+        particle.mesh.visible = true;
+        particles.push(particle);
     }
-
-    if (params.showAxes) {
-        createAxesLines();
-        createAxesLabels();
-    }
-
-    if (params.show3DGrid) {
-        scene.add(create3DGrid(params.gridSize, params.gridDivisions));
-    }
-
-    if (params.showSphere) {
-        const particleGeometry = new THREE.SphereGeometry(params.sphereSize, 32, 32);
-        const particleMaterial = new THREE.MeshStandardMaterial({ color: params.particleColor });
-        particleSphere = new THREE.Mesh(particleGeometry, particleMaterial);
-        particleSphere.castShadow = true;
-        particleSphere.receiveShadow = true;
-        scene.add(particleSphere);
-    }
-
-    if (params.showTrail) {
-        const trailGeometry = new THREE.BufferGeometry();
-        trailGeometry.setAttribute('position', new THREE.Float32BufferAttribute([], 3));
-        const trailMaterial = new THREE.LineBasicMaterial({ color: params.trailColor });
-        trail = new THREE.Line(trailGeometry, trailMaterial);
-        scene.add(trail);
-    }
-
-    r = [0.0, 0.0, 0.0];
-    v = [params.vx, params.vy, params.vz];
-    E = [params.Ex, params.Ey, params.Ez];
-    B = [params.Bx, params.By, params.Bz];
-    positions = [];
 }
 
-function updateSimulation() {
-    const dt = baseDt * (1 / params.animationSpeed);
-    const m = params.mass;
-    for (let step = 0; step < 10; step++) {
-        const [dr, dv] = rungeKutta4(r, v, E, B, params.q, m, dt);
-        r = add(r, dr);
-        v = add(v, dv);
-        positions.push(...r);
+function createInteractiveUI() {
+    gui = new GUI({ width: 300 });
+    
+    // Simulation Control Panel
+    const simCtrl = gui.addFolder('Simulation Control');
+    simCtrl.add(params, 'simulationType', ['Electromagnetic', 'Fluid', 'Gravitational']);
+    simCtrl.add(params, 'qualityPreset', ['Low', 'Medium', 'High']).onChange(updateQuality);
+    simCtrl.add(params, 'maxParticles', 100, 10000).step(100);
+    simCtrl.add({ reset: () => particles = [] }, 'reset').name('Clear Particles');
+    
+    // Particle Design Panel
+    const design = gui.addFolder('Particle Design');
+    design.add(params, 'particleType', params.particleTypes).onChange(updateParticleGeometry);
+    design.addColor({ color: 0x00ffff }, 'color').onChange(v => particlePool.forEach(p => p.mesh.material.color.set(v)));
+    design.add(params, 'particleGlow');
+    design.add(params, 'particleLOD');
+    
+    // Environmental Effects
+    const env = gui.addFolder('Environment Effects');
+    env.add(params, 'environmentMap').onChange(v => scene.background = v ? new THREE.Color(0x000000) : null);
+    env.add(params, 'starField').onChange(toggleStarField);
+    env.add(params, 'bloomEffect').onChange(v => composer.passes[1].enabled = v);
+    env.add(params, 'motionBlur');
+    
+    // Advanced Physics
+    const physics = gui.addFolder('Advanced Physics');
+    physics.add(params, 'chargeDistribution', ['Uniform', 'Random', 'Bipolar']);
+    physics.add(params, 'massVariation', 0, 1).step(0.1);
+    physics.add(params, 'particleExplosions');
+    
+    // Interactive Tools
+    const tools = gui.addFolder('Interactive Tools');
+    tools.add(params, 'touchInteraction').onChange(v => {
+        if(v) initTouchControls();
+    });
+    tools.add(params, 'particlePainting');
+    tools.add(params, 'fieldVisualization3D');
+    
+    gui.close();
+}
+
+function updateQuality() {
+    switch(params.qualityPreset) {
+        case 'High':
+            renderer.setPixelRatio(window.devicePixelRatio);
+            composer.passes[1].strength = 1.5;
+            break;
+        case 'Medium':
+            renderer.setPixelRatio(1);
+            composer.passes[1].strength = 1.0;
+            break;
+        case 'Low':
+            renderer.setPixelRatio(0.75);
+            composer.passes[1].strength = 0.5;
+            break;
     }
+}
 
-    particleSphere.position.set(r[0], r[1], r[2]);
+function initTouchControls() {
+    renderer.domElement.addEventListener('pointerdown', onPointerStart);
+    renderer.domElement.addEventListener('pointermove', onPointerMove);
+    renderer.domElement.addEventListener('pointerup', onPointerEnd);
+}
 
-    const trailGeometry = new THREE.BufferGeometry();
-    trailGeometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-    trail.geometry = trailGeometry;
+function onPointerStart(event) {
+    isDragging = true;
+    lastTouch.set(event.clientX, event.clientY);
+}
+
+function onPointerMove(event) {
+    if(!isDragging) return;
+    
+    const delta = new THREE.Vector2(
+        event.clientX - lastTouch.x,
+        event.clientY - lastTouch.y
+    );
+    
+    if(params.particlePainting) {
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2(
+            (event.clientX / window.innerWidth) * 2 - 1,
+            -(event.clientY / window.innerHeight) * 2 + 1
+        );
+        
+        raycaster.setFromCamera(mouse, camera);
+        const intersects = raycaster.intersectObjects(scene.children);
+        
+        if(intersects.length > 0) {
+            spawnParticle(intersects[0].point, new THREE.Vector3());
+        }
+    }
+    
+    lastTouch.set(event.clientX, event.clientY);
+}
+
+function onPointerEnd() {
+    isDragging = false;
+}
+
+function toggleStarField(enable) {
+    if(enable) {
+        const stars = new THREE.BufferGeometry();
+        const starPositions = [];
+        
+        for(let i = 0; i < 10000; i++) {
+            starPositions.push(
+                Math.random() * 2000 - 1000,
+                Math.random() * 2000 - 1000,
+                Math.random() * 2000 - 1000
+            );
+        }
+        
+        stars.setAttribute('position', new THREE.Float32BufferAttribute(starPositions, 3));
+        const starMaterial = new THREE.PointsMaterial({ color: 0xFFFFFF, size: 0.1 });
+        const starField = new THREE.Points(stars, starMaterial);
+        scene.add(starField);
+    } else {
+        scene.children.filter(c => c.type === 'Points').forEach(c => scene.remove(c));
+    }
+}
+
+function updateParticleSystem(delta) {
+    particles.forEach((particle, index) => {
+        // Advanced physics integration
+        const forces = calculateForces(particle);
+        const acceleration = forces.divideScalar(particle.mass);
+        particle.velocity.add(acceleration.multiplyScalar(delta));
+        particle.mesh.position.add(particle.velocity.clone().multiplyScalar(delta));
+        
+        // Particle aging and recycling
+        particle.age += delta;
+        if(particle.age > particle.lifespan) {
+            particle.mesh.visible = false;
+            particles.splice(index, 1);
+        }
+        
+        // Visual effects
+        if(params.particleGlow) {
+            particle.mesh.material.emissiveIntensity = Math.sin(particle.age * 5) * 0.5 + 0.5;
+        }
+    });
+}
+
+function calculateForces(particle) {
+    const force = new THREE.Vector3();
+    
+    // Electromagnetic forces
+    if(params.simulationType === 'Electromagnetic') {
+        const E = new THREE.Vector3(params.Ex, params.Ey, params.Ez);
+        const B = new THREE.Vector3(params.Bx, params.By, params.Bz);
+        const lorentz = E.clone().add(particle.velocity.clone().cross(B)).multiplyScalar(particle.charge);
+        force.add(lorentz);
+    }
+    
+    // Particle interactions
+    if(params.chargeDistribution !== 'Uniform') {
+        particles.forEach(other => {
+            if(particle !== other) {
+                const dir = other.mesh.position.clone().sub(particle.mesh.position);
+                const distance = dir.length();
+                if(distance < 5) {
+                    const strength = (particle.charge * other.charge) / (distance * distance);
+                    force.add(dir.normalize().multiplyScalar(strength));
+                }
+            }
+        });
+    }
+    
+    return force;
 }
 
 function animate() {
     requestAnimationFrame(animate);
-    if (!isPaused) {
-        updateSimulation();
+    stats.begin();
+    
+    const delta = 0.016;
+    if(!params.isPaused) {
+        updateParticleSystem(delta);
     }
-    renderer.render(scene, camera);
+    
+    controls.update();
+    composer.render();
+    stats.end();
 }
 
-initializeSimulation(true);
-animate();
+// Initialize the enhanced system
+initAdvancedScene();
+initParticleSystem();
+createInteractiveUI();
+toggleStarField(params.starField);
+
+stats = new Stats();
+document.body.appendChild(stats.dom);
+
+controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
 
 window.addEventListener('resize', () => {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
+    composer.setSize(window.innerWidth, window.innerHeight);
 });
 
-document.addEventListener('keydown', (event) => {
-    if (event.key === ' ') {
-        isPaused = !isPaused;
-    }
-});
-
-
-
-
-
-
-
-
+animate();
 
 
 
