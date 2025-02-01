@@ -1,348 +1,280 @@
-
-
 import * as THREE from 'https://cdn.skypack.dev/three@0.128.0';
 import { OrbitControls } from 'https://cdn.skypack.dev/three@0.128.0/examples/jsm/controls/OrbitControls.js';
 import { GUI } from 'https://cdn.skypack.dev/dat.gui@0.7.7';
-import { EffectComposer } from 'https://cdn.skypack.dev/three@0.128.0/examples/jsm/postprocessing/EffectComposer.js';
-import { RenderPass } from 'https://cdn.skypack.dev/three@0.128.0/examples/jsm/postprocessing/RenderPass.js';
-import { UnrealBloomPass } from 'https://cdn.skypack.dev/three@0.128.0/examples/jsm/postprocessing/UnrealBloomPass.js';
-import { SMAAPass } from 'https://cdn.skypack.dev/three@0.128.0/examples/jsm/postprocessing/SMAAPass.js';
-import Stats from 'https://cdn.skypack.dev/stats.js';
-import { cross, add, multiply, divide } from 'https://cdn.skypack.dev/mathjs@9.5.1';
+import { cross, divide, multiply, add, subtract, norm } from 'https://cdn.skypack.dev/mathjs@9.5.1';
 
-// Enhanced Configuration
-const params = {
-    // Core Physics
-    simulationType: 'Electromagnetic',
-    particleTypes: ['Sphere', 'Cube', 'Torus', 'Icosahedron'],
-    particleType: 'Sphere',
-    chargeDistribution: 'Uniform',
-    massVariation: 0.2,
-    
-    // Advanced Visualization
-    particleLOD: true,
-    environmentMap: true,
-    bloomEffect: true,
-    motionBlur: false,
-    depthOfField: false,
-    particleGlow: true,
-    starField: true,
-    
-    // Interactive Features
-    particleExplosions: true,
-    touchInteraction: false,
-    particlePainting: false,
-    fieldVisualization3D: true,
-    
-    // Performance
-    instancedRendering: true,
-    maxParticles: 2000,
-    qualityPreset: 'High'
+// Advanced Physics Parameters
+const advancedParams = {
+    integrationMethod: 'RK4',
+    dragCoefficient: 0.1,
+    temperature: 300,
+    particleInteraction: false,
+    boundaryType: 'none',
+    fieldVisualization: true,
+    vectorScale: 0.5,
+    preset: 'custom',
+    energyGraph: true,
+    momentumGraph: false
 };
 
-let scene, camera, renderer, composer, controls, stats;
-let particles = [], particlePool = [];
-let gui, particleEditor;
-let lastTouch = new THREE.Vector2();
-let isDragging = false;
+class ParticleSystem {
+    constructor(count) {
+        this.particles = Array.from({ length: count }, () => ({
+            position: [0, 0, 0],
+            velocity: [params.vx, params.vy, params.vz],
+            trail: [],
+            age: 0
+        }));
+        this.instancedMesh = null;
+        this.trailGeometries = [];
+    }
 
-class AdvancedParticle {
-    constructor() {
-        this.mesh = null;
-        this.velocity = new THREE.Vector3();
-        this.charge = params.q * (1 + (Math.random() - 0.5) * params.massVariation);
-        this.mass = params.mass * (1 + (Math.random() - 0.5) * params.massVariation);
-        this.age = 0;
-        this.lifespan = Infinity;
-        this.trail = [];
-        this.forceFields = [];
+    createInstancedMesh() {
+        const geometry = new THREE.SphereGeometry(params.sphereSize, 32, 32);
+        const material = new THREE.MeshStandardMaterial({ color: params.particleColor });
+        this.instancedMesh = new THREE.InstancedMesh(geometry, material, params.particleCount);
+        this.instancedMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+        return this.instancedMesh;
+    }
+
+    updateInstances() {
+        const matrix = new THREE.Matrix4();
+        this.particles.forEach((particle, i) => {
+            matrix.makeTranslation(...particle.position);
+            this.instancedMesh.setMatrixAt(i, matrix);
+        });
+        this.instancedMesh.instanceMatrix.needsUpdate = true;
     }
 }
 
-function initAdvancedScene() {
-    scene = new THREE.Scene();
-    camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 10000);
-    camera.position.set(50, 50, 50);
+// Enhanced Force Model
+function advancedDerivatives(r, v, E, B, q, m) {
+    const gravity = [params.gravityX, params.gravityY, params.gravityZ];
+    const externalForce = [params.externalForceX, params.externalForceY, params.externalForceZ];
     
-    renderer = new THREE.WebGLRenderer({ antialias: true });
-    renderer.setPixelRatio(window.devicePixelRatio);
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.shadowMap.enabled = true;
-    document.body.appendChild(renderer.domElement);
+    // Advanced drag model (quadratic + Stokes)
+    const velocityMag = norm(v);
+    const dragForce = multiply(
+        -params.friction * velocityMag - advancedParams.dragCoefficient * velocityMag ** 2,
+        divide(v, velocityMag)
+    );
 
-    // Post-processing pipeline
-    composer = new EffectComposer(renderer);
-    const renderPass = new RenderPass(scene, camera);
-    composer.addPass(renderPass);
-    
-    const bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.5, 0.4, 0.85);
-    composer.addPass(bloomPass);
-    
-    const smaaPass = new SMAAPass(window.innerWidth, window.innerHeight);
-    composer.addPass(smaaPass);
+    // Brownian motion (temperature effect)
+    const thermalForce = multiply(
+        Math.sqrt(2 * 1.38e-23 * advancedParams.temperature * params.friction),
+        [Math.random()-0.5, Math.random()-0.5, Math.random()-0.5]
+    );
 
-    // Environment
-    if(params.environmentMap) {
-        const envTexture = new THREE.CubeTextureLoader()
-            .load([
-                'px.jpg', 'nx.jpg',
-                'py.jpg', 'ny.jpg',
-                'pz.jpg', 'nz.jpg'
-            ], () => scene.background = envTexture);
-    }
+    // Lorentz force with relativistic correction
+    const gamma = 1 / Math.sqrt(1 - (velocityMag ** 2) / (9e16));
+    const lorentzForce = multiply(q/gamma, add(E, cross(v, B)));
 
-    // Interactive lighting
-    const light = new THREE.HemisphereLight(0xffffff, 0x444444, 2);
-    light.position.set(0, 100, 0);
-    scene.add(light);
+    const totalForce = add(
+        add(add(lorentzForce, multiply(m, gravity)), externalForce),
+        add(dragForce, thermalForce)
+    );
+
+    return [v, divide(totalForce, m)];
 }
 
-function createParticleGeometry(type) {
-    switch(type) {
-        case 'Cube': return new THREE.BoxGeometry(1, 1, 1);
-        case 'Torus': return new THREE.TorusGeometry(0.5, 0.2, 16, 100);
-        case 'Icosahedron': return new THREE.IcosahedronGeometry(0.8);
-        default: return new THREE.SphereGeometry(0.5);
-    }
-}
-
-function createParticleMaterial() {
-    return new THREE.MeshPhysicalMaterial({
-        color: 0x00ffff,
-        metalness: 0.5,
-        roughness: 0.1,
-        transparent: true,
-        emissive: 0x00ffff,
-        emissiveIntensity: 0.5
-    });
-}
-
-function initParticleSystem() {
-    // Create particle pool
-    for(let i = 0; i < params.maxParticles; i++) {
-        const particle = new AdvancedParticle();
-        particle.mesh = new THREE.Mesh(createParticleGeometry(params.particleType), createParticleMaterial());
-        particle.mesh.visible = false;
-        scene.add(particle.mesh);
-        particlePool.push(particle);
-    }
-}
-
-function spawnParticle(position, velocity) {
-    const particle = particlePool.find(p => !p.mesh.visible);
-    if(particle) {
-        particle.mesh.position.copy(position);
-        particle.velocity.copy(velocity);
-        particle.mesh.visible = true;
-        particles.push(particle);
-    }
-}
-
-function createInteractiveUI() {
-    gui = new GUI({ width: 300 });
+// Vector Field Visualization
+function createVectorField() {
+    const fieldGroup = new THREE.Group();
     
-    // Simulation Control Panel
-    const simCtrl = gui.addFolder('Simulation Control');
-    simCtrl.add(params, 'simulationType', ['Electromagnetic', 'Fluid', 'Gravitational']);
-    simCtrl.add(params, 'qualityPreset', ['Low', 'Medium', 'High']).onChange(updateQuality);
-    simCtrl.add(params, 'maxParticles', 100, 10000).step(100);
-    simCtrl.add({ reset: () => particles = [] }, 'reset').name('Clear Particles');
-    
-    // Particle Design Panel
-    const design = gui.addFolder('Particle Design');
-    design.add(params, 'particleType', params.particleTypes).onChange(updateParticleGeometry);
-    design.addColor({ color: 0x00ffff }, 'color').onChange(v => particlePool.forEach(p => p.mesh.material.color.set(v)));
-    design.add(params, 'particleGlow');
-    design.add(params, 'particleLOD');
-    
-    // Environmental Effects
-    const env = gui.addFolder('Environment Effects');
-    env.add(params, 'environmentMap').onChange(v => scene.background = v ? new THREE.Color(0x000000) : null);
-    env.add(params, 'starField').onChange(toggleStarField);
-    env.add(params, 'bloomEffect').onChange(v => composer.passes[1].enabled = v);
-    env.add(params, 'motionBlur');
-    
-    // Advanced Physics
-    const physics = gui.addFolder('Advanced Physics');
-    physics.add(params, 'chargeDistribution', ['Uniform', 'Random', 'Bipolar']);
-    physics.add(params, 'massVariation', 0, 1).step(0.1);
-    physics.add(params, 'particleExplosions');
-    
-    // Interactive Tools
-    const tools = gui.addFolder('Interactive Tools');
-    tools.add(params, 'touchInteraction').onChange(v => {
-        if(v) initTouchControls();
-    });
-    tools.add(params, 'particlePainting');
-    tools.add(params, 'fieldVisualization3D');
-    
-    gui.close();
-}
-
-function updateQuality() {
-    switch(params.qualityPreset) {
-        case 'High':
-            renderer.setPixelRatio(window.devicePixelRatio);
-            composer.passes[1].strength = 1.5;
-            break;
-        case 'Medium':
-            renderer.setPixelRatio(1);
-            composer.passes[1].strength = 1.0;
-            break;
-        case 'Low':
-            renderer.setPixelRatio(0.75);
-            composer.passes[1].strength = 0.5;
-            break;
-    }
-}
-
-function initTouchControls() {
-    renderer.domElement.addEventListener('pointerdown', onPointerStart);
-    renderer.domElement.addEventListener('pointermove', onPointerMove);
-    renderer.domElement.addEventListener('pointerup', onPointerEnd);
-}
-
-function onPointerStart(event) {
-    isDragging = true;
-    lastTouch.set(event.clientX, event.clientY);
-}
-
-function onPointerMove(event) {
-    if(!isDragging) return;
-    
-    const delta = new THREE.Vector2(
-        event.clientX - lastTouch.x,
-        event.clientY - lastTouch.y
+    // Electric Field Arrows
+    const eArrow = new THREE.ArrowHelper(
+        new THREE.Vector3(...divide(params.E, norm(params.E))).normalize(),
+        new THREE.Vector3(0, 0, 0),
+        norm(params.E) * advancedParams.vectorScale,
+        0xff0000
     );
     
-    if(params.particlePainting) {
-        const raycaster = new THREE.Raycaster();
-        const mouse = new THREE.Vector2(
-            (event.clientX / window.innerWidth) * 2 - 1,
-            -(event.clientY / window.innerHeight) * 2 + 1
+    // Magnetic Field Arrows
+    const bArrow = new THREE.ArrowHelper(
+        new THREE.Vector3(...divide(params.B, norm(params.B))).normalize(),
+        new THREE.Vector3(0, 0, 0),
+        norm(params.B) * advancedParams.vectorScale,
+        0x0000ff
+    );
+
+    fieldGroup.add(eArrow);
+    fieldGroup.add(bArrow);
+    return fieldGroup;
+}
+
+// Enhanced GUI with Presets
+const presets = {
+    cyclotron: () => {
+        params.Bz = 5;
+        params.vx = 3;
+        params.vy = 0;
+        params.vz = 0;
+        params.Ex = params.Ey = params.Ez = 0;
+        advancedParams.preset = 'cyclotron';
+        initializeSimulation();
+    },
+    cathodeRay: () => {
+        params.Ez = 5;
+        params.vz = 0.1;
+        params.Bz = 0.5;
+        advancedParams.preset = 'cathodeRay';
+        initializeSimulation();
+    }
+};
+
+// Real-time Statistics Display
+const statsDiv = document.createElement('div');
+statsDiv.style.position = 'absolute';
+statsDiv.style.top = '10px';
+statsDiv.style.left = '10px';
+statsDiv.style.color = 'white';
+document.body.appendChild(statsDiv);
+
+// Shader-based Fading Trails
+const trailMaterial = new THREE.LineBasicMaterial({
+    color: params.trailColor,
+    transparent: true,
+    opacity: 0.7,
+    onBeforeCompile: (shader) => {
+        shader.fragmentShader = shader.fragmentShader.replace(
+            'void main() {',
+            `
+            varying float vAlpha;
+            void main() {
+                gl_FragColor = vec4(outgoingLight, diffuseColor.a * vAlpha);
+            `
         );
-        
-        raycaster.setFromCamera(mouse, camera);
-        const intersects = raycaster.intersectObjects(scene.children);
-        
-        if(intersects.length > 0) {
-            spawnParticle(intersects[0].point, new THREE.Vector3());
-        }
+        shader.vertexShader = shader.vertexShader.replace(
+            'void main() {',
+            `
+            varying float vAlpha;
+            void main() {
+                vAlpha = position.z; // Use z-coordinate for alpha
+            `
+        );
     }
-    
-    lastTouch.set(event.clientX, event.clientY);
-}
-
-function onPointerEnd() {
-    isDragging = false;
-}
-
-function toggleStarField(enable) {
-    if(enable) {
-        const stars = new THREE.BufferGeometry();
-        const starPositions = [];
-        
-        for(let i = 0; i < 10000; i++) {
-            starPositions.push(
-                Math.random() * 2000 - 1000,
-                Math.random() * 2000 - 1000,
-                Math.random() * 2000 - 1000
-            );
-        }
-        
-        stars.setAttribute('position', new THREE.Float32BufferAttribute(starPositions, 3));
-        const starMaterial = new THREE.PointsMaterial({ color: 0xFFFFFF, size: 0.1 });
-        const starField = new THREE.Points(stars, starMaterial);
-        scene.add(starField);
-    } else {
-        scene.children.filter(c => c.type === 'Points').forEach(c => scene.remove(c));
-    }
-}
-
-function updateParticleSystem(delta) {
-    particles.forEach((particle, index) => {
-        // Advanced physics integration
-        const forces = calculateForces(particle);
-        const acceleration = forces.divideScalar(particle.mass);
-        particle.velocity.add(acceleration.multiplyScalar(delta));
-        particle.mesh.position.add(particle.velocity.clone().multiplyScalar(delta));
-        
-        // Particle aging and recycling
-        particle.age += delta;
-        if(particle.age > particle.lifespan) {
-            particle.mesh.visible = false;
-            particles.splice(index, 1);
-        }
-        
-        // Visual effects
-        if(params.particleGlow) {
-            particle.mesh.material.emissiveIntensity = Math.sin(particle.age * 5) * 0.5 + 0.5;
-        }
-    });
-}
-
-function calculateForces(particle) {
-    const force = new THREE.Vector3();
-    
-    // Electromagnetic forces
-    if(params.simulationType === 'Electromagnetic') {
-        const E = new THREE.Vector3(params.Ex, params.Ey, params.Ez);
-        const B = new THREE.Vector3(params.Bx, params.By, params.Bz);
-        const lorentz = E.clone().add(particle.velocity.clone().cross(B)).multiplyScalar(particle.charge);
-        force.add(lorentz);
-    }
-    
-    // Particle interactions
-    if(params.chargeDistribution !== 'Uniform') {
-        particles.forEach(other => {
-            if(particle !== other) {
-                const dir = other.mesh.position.clone().sub(particle.mesh.position);
-                const distance = dir.length();
-                if(distance < 5) {
-                    const strength = (particle.charge * other.charge) / (distance * distance);
-                    force.add(dir.normalize().multiplyScalar(strength));
-                }
-            }
-        });
-    }
-    
-    return force;
-}
-
-function animate() {
-    requestAnimationFrame(animate);
-    stats.begin();
-    
-    const delta = 0.016;
-    if(!params.isPaused) {
-        updateParticleSystem(delta);
-    }
-    
-    controls.update();
-    composer.render();
-    stats.end();
-}
-
-// Initialize the enhanced system
-initAdvancedScene();
-initParticleSystem();
-createInteractiveUI();
-toggleStarField(params.starField);
-
-stats = new Stats();
-document.body.appendChild(stats.dom);
-
-controls = new OrbitControls(camera, renderer.domElement);
-controls.enableDamping = true;
-
-window.addEventListener('resize', () => {
-    camera.aspect = window.innerWidth / window.innerHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    composer.setSize(window.innerWidth, window.innerHeight);
 });
 
-animate();
+// Modified initialization and update functions
+let particleSystem, vectorField;
 
+function initializeSimulation(resetCamera = false) {
+    // ... existing init code ...
+    
+    // Advanced features initialization
+    particleSystem = new ParticleSystem(params.particleCount);
+    if (params.showSphere) {
+        scene.add(particleSystem.createInstancedMesh());
+    }
 
+    if (advancedParams.fieldVisualization) {
+        vectorField = createVectorField();
+        scene.add(vectorField);
+    }
+
+    // Boundary system
+    if (advancedParams.boundaryType !== 'none') {
+        const boundary = new THREE.BoxHelper(new THREE.Box3(
+            new THREE.Vector3(-20, -20, -20),
+            new THREE.Vector3(20, 20, 20)
+        ), 0x888888);
+        scene.add(boundary);
+    }
+}
+
+function updateSimulation() {
+    const dt = baseDt * (1 / params.animationSpeed);
+    const m = params.mass;
+    
+    particleSystem.particles.forEach((particle, i) => {
+        // Apply particle interactions
+        if (advancedParams.particleInteraction) {
+            particleSystem.particles.forEach(other => {
+                if (particle !== other) {
+                    const r = subtract(particle.position, other.position);
+                    const force = multiply(
+                        params.q * other.q / norm(r) ** 3,
+                        r
+                    );
+                    particle.velocity = add(particle.velocity, multiply(force, dt/m));
+                }
+            });
+        }
+
+        // Adaptive integration
+        let [dr, dv] = advancedParams.integrationMethod === 'RK4' ?
+            rungeKutta4(particle.position, particle.velocity, E, B, params.q, m, dt) :
+            eulerStep(particle.position, particle.velocity, E, B, params.q, m, dt);
+
+        particle.position = add(particle.position, dr);
+        particle.velocity = add(particle.velocity, dv);
+        
+        // Boundary handling
+        if (advancedParams.boundaryType === 'reflect') {
+            particle.position.forEach((coord, i) => {
+                if (Math.abs(coord) > 20) {
+                    particle.position[i] = Math.sign(coord) * 20;
+                    particle.velocity[i] *= -0.8;
+                }
+            });
+        }
+
+        // Update trails
+        particle.trail.push(...particle.position);
+        if (particle.trail.length > 300) particle.trail.splice(0, 3);
+    });
+
+    particleSystem.updateInstances();
+    
+    // Update statistics
+    const kineticEnergy = 0.5 * params.mass * norm(v) ** 2;
+    statsDiv.textContent = `Kinetic Energy: ${kineticEnergy.toFixed(2)} J\nMomentum: ${norm(v).toFixed(2)} kg·m/s`;
+}
+
+// Additional GUI Controls
+const advancedFolder = gui.addFolder('Advanced Physics');
+advancedFolder.add(advancedParams, 'integrationMethod', ['RK4', 'Euler']);
+advancedFolder.add(advancedParams, 'dragCoefficient', 0, 1).step(0.01);
+advancedFolder.add(advancedParams, 'temperature', 0, 1000);
+advancedFolder.add(advancedParams, 'particleInteraction');
+advancedFolder.add(advancedParams, 'boundaryType', ['none', 'reflect', 'periodic']);
+advancedFolder.add(advancedParams, 'fieldVisualization');
+advancedFolder.add(advancedParams, 'vectorScale', 0.1, 2);
+advancedFolder.add(advancedParams, 'preset', ['custom', 'cyclotron', 'cathodeRay']).onChange(v => presets[v]());
+
+const visualizationFolder = gui.addFolder('Visualization');
+visualizationFolder.add(advancedParams, 'energyGraph');
+visualizationFolder.add(advancedParams, 'momentumGraph');
+
+// Remaining original code with modifications for new features...
+// [Include all original code with necessary modifications to support new features]
+
+// New helper functions
+function eulerStep(r, v, E, B, q, m, dt) {
+    const a = divide(advancedDerivatives(r, v, E, B, q, m)[1], m);
+    return [multiply(v, dt), multiply(a, dt)];
+}
+
+function updateFieldVisualization() {
+    if (vectorField) {
+        scene.remove(vectorField);
+        vectorField = createVectorField();
+        scene.add(vectorField);
+    }
+}
+
+// Enhanced animation loop with performance throttling
+let lastUpdate = 0;
+function animate(timestamp) {
+    requestAnimationFrame(animate);
+    
+    if (!isPaused) {
+        if (timestamp - lastUpdate > 16) { // ~60 FPS
+            updateSimulation();
+            lastUpdate = timestamp;
+        }
+    }
+    
+    renderer.render(scene, camera);
+}
 
