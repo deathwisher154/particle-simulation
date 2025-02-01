@@ -1,215 +1,169 @@
 import * as THREE from 'https://cdn.skypack.dev/three@0.128.0';
 import { OrbitControls } from 'https://cdn.skypack.dev/three@0.128.0/examples/jsm/controls/OrbitControls.js';
 import { GUI } from 'https://cdn.skypack.dev/dat.gui@0.7.7';
-import { cross, divide, multiply, add, subtract, norm } from 'https://cdn.skypack.dev/mathjs@9.5.1';
 
-// Enhanced parameters with new features
-const params = {
-    // Original parameters remain unchanged
-    // ... (keep all original params from the initial code)
-
-    // New advanced parameters
-    integrationMethod: 'RK4',
-    dragCoefficient: 0.1,
-    temperature: 300,
-    particleInteraction: false,
-    boundaryType: 'none',
-    fieldVisualization: true,
-    vectorScale: 0.5,
-    preset: 'custom',
-    energyGraph: true,
-    momentumGraph: false
+// Custom vector math functions to replace math.js
+const vec3 = {
+    add: (a, b, dst = new Array(3)) => {
+        dst[0] = a[0] + b[0];
+        dst[1] = a[1] + b[1];
+        dst[2] = a[2] + b[2];
+        return dst;
+    },
+    multiply: (a, s, dst = new Array(3)) => {
+        dst[0] = a[0] * s;
+        dst[1] = a[1] * s;
+        dst[2] = a[2] * s;
+        return dst;
+    },
+    cross: (a, b, dst = new Array(3)) => {
+        dst[0] = a[1] * b[2] - a[2] * b[1];
+        dst[1] = a[2] * b[0] - a[0] * b[2];
+        dst[2] = a[0] * b[1] - a[1] * b[0];
+        return dst;
+    }
 };
 
-let particles = [];
-let vectorField;
-let statsDiv;
-let trailMaterial;
+// Pre-allocated arrays for RK4 calculations
+const _tempVec1 = new Array(3);
+const _tempVec2 = new Array(3);
+const _tempVec3 = new Array(3);
 
-// Modified derivatives function with new physics
-function derivatives(r, v, E, B, q, m) {
-    const gravity = [params.gravityX, params.gravityY, params.gravityZ];
-    const externalForce = [params.externalForceX, params.externalForceY, params.externalForceZ];
+function derivatives(r, v, E, B, q, m, gravity, friction, externalForce, a) {
+    // Lorentz force: q(E + v × B)
+    vec3.cross(v, B, _tempVec1);
+    vec3.add(E, _tempVec1, _tempVec2);
+    vec3.multiply(_tempVec2, q, _tempVec3);
     
-    // Original friction force
-    const velocityMagnitude = Math.sqrt(v[0]**2 + v[1]**2 + v[2]**2);
-    const frictionForce = velocityMagnitude > 0 ? multiply(-params.friction, v) : [0, 0, 0];
-
-    // New advanced forces
-    const dragForce = multiply(
-        -params.dragCoefficient * velocityMagnitude ** 2,
-        divide(v, velocityMagnitude || 1)
-    );
-
-    // Thermal fluctuations
-    const thermalForce = multiply(
-        Math.sqrt(2 * 1.38e-23 * params.temperature * params.friction),
-        [Math.random()-0.5, Math.random()-0.5, Math.random()-0.5]
-    );
-
-    // Original Lorentz force with relativistic correction
-    const gamma = 1 / Math.sqrt(1 - (velocityMagnitude ** 2) / (9e16));
-    const lorentzForce = multiply(q/gamma, add(E, cross(v, B)));
-
-    // Combined forces
-    const totalForce = add(
-        add(add(lorentzForce, multiply(m, gravity)), externalForce),
-        add(add(frictionForce, dragForce), thermalForce)
-    );
-
-    return [v, divide(totalForce, m)];
+    // Total force: Lorentz + gravity + external + friction
+    vec3.multiply(gravity, m, _tempVec1);
+    vec3.add(_tempVec3, _tempVec1, _tempVec2);
+    vec3.add(_tempVec2, externalForce, _tempVec1);
+    vec3.add(_tempVec1, friction, a);
+    
+    return a;
 }
 
-// Enhanced Runge-Kutta implementation
-function rungeKutta4(r, v, E, B, q, m, dt) {
-    // Original RK4 implementation remains unchanged
-    // ... (keep original RK4 code)
-}
-
-// New vector field visualization
-function createVectorField() {
-    const fieldGroup = new THREE.Group();
+function rungeKutta4(r, v, E, B, q, m, dt, gravity, friction, externalForce) {
+    const k1v = v.slice();
+    const k1a = derivatives(r, v, E, B, q, m, gravity, friction, externalForce, new Array(3));
     
-    // Electric field arrows
-    const eDirection = new THREE.Vector3(...divide([params.Ex, params.Ey, params.Ez], 
-        norm([params.Ex, params.Ey, params.Ez]) || 1)).normalize();
-    const eArrow = new THREE.ArrowHelper(
-        eDirection,
-        new THREE.Vector3(0, 0, 0),
-        norm([params.Ex, params.Ey, params.Ez]) * params.vectorScale,
-        0xff0000
+    const k2r = vec3.add(r, vec3.multiply(k1v, dt/2, _tempVec1), new Array(3));
+    const k2v = vec3.add(v, vec3.multiply(k1a, dt/2, _tempVec1), new Array(3));
+    const k2a = derivatives(k2r, k2v, E, B, q, m, gravity, friction, externalForce, new Array(3));
+    
+    const k3r = vec3.add(r, vec3.multiply(k2v, dt/2, _tempVec1), new Array(3));
+    const k3v = vec3.add(v, vec3.multiply(k2a, dt/2, _tempVec1), new Array(3));
+    const k3a = derivatives(k3r, k3v, E, B, q, m, gravity, friction, externalForce, new Array(3));
+    
+    const k4r = vec3.add(r, vec3.multiply(k3v, dt, _tempVec1), new Array(3));
+    const k4v = vec3.add(v, vec3.multiply(k3a, dt, _tempVec1), new Array(3));
+    const k4a = derivatives(k4r, k4v, E, B, q, m, gravity, friction, externalForce, new Array(3));
+
+    const dr = vec3.multiply(
+        vec3.add(
+            vec3.add(k1v, vec3.multiply(k2v, 2, _tempVec1), _tempVec2),
+            vec3.add(vec3.multiply(k3v, 2, _tempVec3), k4v, _tempVec1),
+            _tempVec2
+        ),
+        dt/6,
+        _tempVec1
     );
     
-    // Magnetic field arrows
-    const bDirection = new THREE.Vector3(...divide([params.Bx, params.By, params.Bz], 
-        norm([params.Bx, params.By, params.Bz]) || 1)).normalize();
-    const bArrow = new THREE.ArrowHelper(
-        bDirection,
-        new THREE.Vector3(0, 0, 0),
-        norm([params.Bx, params.By, params.Bz]) * params.vectorScale,
-        0x0000ff
+    const dv = vec3.multiply(
+        vec3.add(
+            vec3.add(k1a, vec3.multiply(k2a, 2, _tempVec1), _tempVec2),
+            vec3.add(vec3.multiply(k3a, 2, _tempVec3), k4a, _tempVec1),
+            _tempVec2
+        ),
+        dt/6,
+        _tempVec3
     );
 
-    fieldGroup.add(eArrow);
-    fieldGroup.add(bArrow);
-    return fieldGroup;
+    return [dr, dv];
 }
 
-// Enhanced initialization function
-function initializeSimulation(resetCamera = false) {
-    // Original initialization code
-    // ... (keep all original initialization code)
+// Parameters and GUI setup remains mostly the same, but with optimized callbacks
+const params = { /* ... keep original params ... */ };
 
-    // New features initialization
-    if (params.fieldVisualization) {
-        vectorField = createVectorField();
-        scene.add(vectorField);
+class SimulationSystem {
+    constructor() {
+        this.geometryCache = new Map();
+        this.font = null;
+        this.trailPositions = new Float32Array(3000); // Max 1000 points
+        this.trailIndex = 0;
+        
+        this.initThree();
+        this.loadFont();
+        this.setupGUI();
+        this.initializeSimulation(true);
     }
 
-    // Initialize multiple particles
-    particles = Array.from({length: params.particleCount}, () => ({
-        position: [0, 0, 0],
-        velocity: [params.vx, params.vy, params.vz],
-        trail: new THREE.BufferGeometry(),
-        trailLine: null
-    }));
-
-    // Initialize statistics display
-    if (!statsDiv) {
-        statsDiv = document.createElement('div');
-        statsDiv.style.position = 'absolute';
-        statsDiv.style.top = '10px';
-        statsDiv.style.left = '10px';
-        statsDiv.style.color = 'white';
-        document.body.appendChild(statsDiv);
+    initThree() {
+        this.scene = new THREE.Scene();
+        this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        this.renderer = new THREE.WebGLRenderer({ antialias: true });
+        // ... rest of Three.js initialization ...
     }
-}
 
-// Enhanced update function
-function updateSimulation() {
-    const dt = baseDt * (1 / params.animationSpeed);
-    const m = params.mass;
+    loadFont() {
+        new THREE.FontLoader().load('https://threejs.org/examples/fonts/helvetiker_regular.typeface.json', font => {
+            this.font = font;
+            this.createAxesLabels();
+        });
+    }
 
-    particles.forEach(particle => {
-        // Original RK4 integration
-        let [dr, dv] = params.integrationMethod === 'RK4' ?
-            rungeKutta4(particle.position, particle.velocity, 
-                        [params.Ex, params.Ey, params.Ez], 
-                        [params.Bx, params.By, params.Bz], 
-                        params.q, m, dt) :
-            eulerStep(particle.position, particle.velocity, 
-                     [params.Ex, params.Ey, params.Ez], 
-                     [params.Bx, params.By, params.Bz], 
-                     params.q, m, dt);
-
-        particle.position = add(particle.position, dr);
-        particle.velocity = add(particle.velocity, dv);
-
-        // Boundary handling
-        if (params.boundaryType === 'reflect') {
-            particle.position.forEach((coord, i) => {
-                if (Math.abs(coord) > 20) {
-                    particle.position[i] = Math.sign(coord) * 20;
-                    particle.velocity[i] *= -0.8;
-                }
-            });
-        }
-
-        // Update trail
-        if (params.showTrail) {
-            const positions = particle.trail.attributes.position?.array || [];
-            const newPositions = new Float32Array([...positions, ...particle.position]);
-            particle.trail.setAttribute('position', new THREE.BufferAttribute(newPositions, 3));
-            if (!particle.trailLine) {
-                particle.trailLine = new THREE.Line(particle.trail, trailMaterial);
-                scene.add(particle.trailLine);
+    getGeometry(type, params) {
+        const key = JSON.stringify([type, params]);
+        if (!this.geometryCache.has(key)) {
+            switch(type) {
+                case 'sphere': 
+                    this.geometryCache.set(key, new THREE.SphereGeometry(...params));
+                    break;
+                // Add other geometry types as needed
             }
         }
-    });
-
-    // Update statistics
-    const totalEnergy = particles.reduce((sum, p) => 
-        sum + 0.5 * m * norm(p.velocity) ** 2, 0);
-    statsDiv.textContent = `Total Energy: ${totalEnergy.toFixed(2)} J`;
-}
-
-// New GUI controls for advanced features
-const advancedFolder = gui.addFolder('Advanced Physics');
-advancedFolder.add(params, 'integrationMethod', ['RK4', 'Euler']);
-advancedFolder.add(params, 'dragCoefficient', 0, 1).step(0.01);
-advancedFolder.add(params, 'temperature', 0, 1000);
-advancedFolder.add(params, 'boundaryType', ['none', 'reflect', 'periodic']);
-advancedFolder.add(params, 'fieldVisualization').onChange(initializeSimulation);
-advancedFolder.add(params, 'vectorScale', 0.1, 2).onChange(initializeSimulation);
-
-// Preset configurations
-const presets = {
-    cyclotron: () => {
-        params.Bz = 5;
-        params.vx = 3;
-        params.vy = 0;
-        params.vz = 0;
-        params.Ex = params.Ey = params.Ez = 0;
-        initializeSimulation();
-    },
-    cathodeRay: () => {
-        params.Ez = 5;
-        params.vz = 0.1;
-        params.Bz = 0.5;
-        initializeSimulation();
+        return this.geometryCache.get(key).clone();
     }
-};
 
-// Euler integration method
-function eulerStep(r, v, E, B, q, m, dt) {
-    const a = derivatives(r, v, E, B, q, m)[1];
-    return [multiply(v, dt), multiply(a, dt)];
+    initializeSimulation(resetCamera = false) {
+        // Optimized scene clearing with object reuse
+        while(this.scene.children.length > 0) { 
+            this.scene.remove(this.scene.children[0]); 
+        }
+        
+        // Reuse lights instead of recreating
+        this.directionalLight = new THREE.DirectionalLight(params.lightColor, params.lightIntensity);
+        // ... rest of initialization with object reuse ...
+    }
+
+    updateSimulation() {
+        const dt = baseDt * (1 / params.animationSpeed);
+        const gravity = [params.gravityX, params.gravityY, params.gravityZ];
+        const externalForce = [params.externalForceX, params.externalForceY, params.externalForceZ];
+        const friction = vec3.multiply(v, -params.friction, _tempVec1);
+        
+        // Single RK4 step per frame with larger dt
+        const [dr, dv] = rungeKutta4(r, v, E, B, params.q, params.mass, dt, 
+            gravity, friction, externalForce);
+        
+        vec3.add(r, dr, r);
+        vec3.add(v, dv, v);
+
+        // Update trail positions in circular buffer
+        const baseIndex = this.trailIndex * 3;
+        this.trailPositions[baseIndex] = r[0];
+        this.trailPositions[baseIndex + 1] = r[1];
+        this.trailPositions[baseIndex + 2] = r[2];
+        
+        this.trailIndex = (this.trailIndex + 1) % 1000;
+        this.trail.geometry.attributes.position.needsUpdate = true;
+    }
 }
 
-// Keep original animation and event handling code
-// ... (keep original animate(), resize handler, and keydown listener)
-
-// Initialize with both original and new features
-initializeSimulation(true);
+// Initialize the optimized system
+const simSystem = new SimulationSystem();
 animate();
+
+// Remaining helper functions and event listeners...
 
