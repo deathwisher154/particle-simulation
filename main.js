@@ -18,7 +18,7 @@ const params = {
     gridDivisions: 20,
     lightIntensity: 1,
     lightColor: '#ffffff',
-    particleCount: 1,    // Fixed to 1 particle only
+    particleCount: 1,    // Initial particle count is 1
     mass: 1.0,
     radius: 0.4,
     friction: 0.1,
@@ -380,6 +380,7 @@ visualsFolder.add(params, 'show3DGrid').name('Show grid').onChange(() => {
 visualsFolder.addColor(params, 'backgroundColor').name('Background color').onChange(() => {
     scene.background.set(params.backgroundColor);
 });
+visualsFolder.add(params, 'particleCount', 1, 10, 1).name('Particle count').onFinishChange(() => initializeSimulation());
 visualsFolder.add(params, 'trailPersistence').name('Persist Trails (No Auto Clear)').onChange(() => {
     if (!params.trailPersistence) {
         particles.forEach(p => {
@@ -423,6 +424,7 @@ function animate() {
     if (!isPaused) updateSimulation();
     renderer.render(scene, camera);
 }
+
 
 
 
