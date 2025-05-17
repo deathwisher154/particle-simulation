@@ -25,7 +25,7 @@ const params = {
     gravityX: 0.0, gravityY: -9.8, gravityZ: 0.0,
     externalForceX: 0.0, externalForceY: 0.0, externalForceZ: 0.0,
     backgroundColor: '#000000',
-    trailPersistence: true,  // New: keep trails indefinitely if true
+    trailPersistence: true,  // Keep trails indefinitely if true
 };
 
 const baseDt = 0.01;
@@ -48,15 +48,16 @@ scene.add(new THREE.AmbientLight(0x404040));
 
 class Particle {
     constructor() {
-        this.r = new THREE.Vector3((Math.random() - 0.5) * 10, (Math.random() - 0.5) * 10, (Math.random() - 0.5) * 10);
+        // Start all particles at origin
+        this.r = new THREE.Vector3(0, 0, 0);
         this.v = new THREE.Vector3(params.vx, params.vy, params.vz);
 
-        this.maxTrailPoints = 5000; // Increased for longer trails
+        this.maxTrailPoints = 5000; // Longer trails
         this.positions = new Float32Array(this.maxTrailPoints * 3);
         this.positionCount = 0;
         this.trailIndex = 0;
 
-        this.trajectoryData = []; // For export: stores {time, x, y, z}
+        this.trajectoryData = [];
 
         const geometry = new THREE.SphereGeometry(params.radius, 16, 16);
         const material = new THREE.MeshStandardMaterial({ color: params.particleColor });
@@ -72,7 +73,6 @@ class Particle {
     }
 
     updateTrail() {
-        // If trailPersistence is false, clear trail when full
         if (!params.trailPersistence && this.positionCount >= this.maxTrailPoints) {
             this.positionCount = 0;
             this.trailIndex = 0;
@@ -166,6 +166,66 @@ function clearScene() {
     }
 }
 
+function createBetterAxes(size = 10) {
+    const axesGroup = new THREE.Group();
+
+    // Thick colored axes lines
+    const axisMaterialX = new THREE.LineBasicMaterial({ color: 0xff0000, linewidth: 3 });
+    const axisMaterialY = new THREE.LineBasicMaterial({ color: 0x00ff00, linewidth: 3 });
+    const axisMaterialZ = new THREE.LineBasicMaterial({ color: 0x0000ff, linewidth: 3 });
+
+    // Lines for X, Y, Z
+    const xGeometry = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, 0), new THREE.Vector3(size, 0, 0)]);
+    const xAxis = new THREE.Line(xGeometry, axisMaterialX);
+    axesGroup.add(xAxis);
+
+    const yGeometry = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, size, 0)]);
+    const yAxis = new THREE.Line(yGeometry, axisMaterialY);
+    axesGroup.add(yAxis);
+
+    const zGeometry = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, size)]);
+    const zAxis = new THREE.Line(zGeometry, axisMaterialZ);
+    axesGroup.add(zAxis);
+
+    // Create text sprites for axis labels
+    const createTextSprite = (text, color) => {
+        const canvas = document.createElement('canvas');
+        const size = 128;
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext('2d');
+        ctx.font = 'Bold 70px Arial';
+        ctx.fillStyle = color;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(text, size / 2, size / 2);
+
+        const texture = new THREE.CanvasTexture(canvas);
+        texture.minFilter = THREE.LinearFilter;
+        const spriteMaterial = new THREE.SpriteMaterial({ map: texture, depthTest: false });
+        const sprite = new THREE.Sprite(spriteMaterial);
+        sprite.scale.set(1.5, 1.5, 1.5);
+        return sprite;
+    };
+
+    const labelX = createTextSprite('X', '#ff0000');
+    labelX.position.set(size + 0.7, 0, 0);
+    axesGroup.add(labelX);
+
+    const labelY = createTextSprite('Y', '#00ff00');
+    labelY.position.set(0, size + 0.7, 0);
+    axesGroup.add(labelY);
+
+    const labelZ = createTextSprite('Z', '#0000ff');
+    labelZ.position.set(0, 0, size + 0.7);
+    axesGroup.add(labelZ);
+
+    return axesGroup;
+}
+
+let axesHelper = null;
+let gridHelper = null;
+
 function initializeSimulation(resetCamera = false) {
     clearScene();
 
@@ -175,7 +235,7 @@ function initializeSimulation(resetCamera = false) {
     scene.add(new THREE.AmbientLight(0x404040));
 
     if (params.showAxes) {
-        axesHelper = new THREE.AxesHelper(10);
+        axesHelper = createBetterAxes(10);
         scene.add(axesHelper);
     } else {
         axesHelper = null;
@@ -206,7 +266,7 @@ function initializeSimulation(resetCamera = false) {
 
 function updateSimulation() {
     const dt = baseDt * (1 / params.animationSpeed);
-    const currentTime = performance.now() / 1000; // seconds
+    const currentTime = performance.now() / 1000;
 
     particles.forEach(particle => {
         const [dr, dv] = rk4Step(particle, dt);
@@ -219,9 +279,8 @@ function updateSimulation() {
     });
 }
 
-// --- Preset motion initializers ---
+// Preset motions
 function presetCyclotron() {
-    // Circular motion in B field, no E, no friction
     params.Ex = 0; params.Ey = 0; params.Ez = 0;
     params.Bx = 0; params.By = 0; params.Bz = 1;
     params.friction = 0;
@@ -234,7 +293,6 @@ function presetCyclotron() {
 }
 
 function presetCycloidal() {
-    // E perpendicular to B to get cycloidal motion, no friction
     params.Ex = 1;
     params.Ey = 0;
     params.Ez = 0;
@@ -251,7 +309,6 @@ function presetCycloidal() {
 }
 
 function presetStraightLine() {
-    // No fields, constant velocity
     params.Ex = 0;
     params.Ey = 0;
     params.Ez = 0;
@@ -272,7 +329,6 @@ function invertChargeSign() {
     initializeSimulation(false);
 }
 
-// Export trajectory data for all particles as CSV string and download
 function exportTrajectories() {
     let csv = 'particle,time,x,y,z\n';
     particles.forEach((p, i) => {
@@ -293,7 +349,7 @@ function exportTrajectories() {
     URL.revokeObjectURL(url);
 }
 
-// --- GUI Setup ---
+// GUI
 const gui = new GUI();
 
 const physicsFolder = gui.addFolder('Physics');
@@ -321,17 +377,18 @@ visualsFolder.add(params, 'showSphere').name('Show spheres').onChange(() =>
     particles.forEach(p => p.mesh.visible = params.showSphere));
 visualsFolder.add(params, 'showTrail').name('Show trails').onChange(() =>
     particles.forEach(p => p.trail.visible = params.showTrail));
-visualsFolder.add(params, 'showAxes').name('Show axes').onChange(() =>
-    axesHelper && (axesHelper.visible = params.showAxes));
-visualsFolder.add(params, 'show3DGrid').name('Show grid').onChange(() =>
-    gridHelper && (gridHelper.visible = params.show3DGrid));
+visualsFolder.add(params, 'showAxes').name('Show axes').onChange(() => {
+    if (axesHelper) axesHelper.visible = params.showAxes;
+});
+visualsFolder.add(params, 'show3DGrid').name('Show grid').onChange(() => {
+    if (gridHelper) gridHelper.visible = params.show3DGrid;
+});
 visualsFolder.addColor(params, 'backgroundColor').name('Background color').onChange(() => {
     scene.background.set(params.backgroundColor);
 });
 visualsFolder.add(params, 'particleCount', 1, 10, 1).name('Particle count').onFinishChange(() => initializeSimulation());
 visualsFolder.add(params, 'trailPersistence').name('Persist Trails (No Auto Clear)').onChange(() => {
     if (!params.trailPersistence) {
-        // If disabling persistence, clear all trails now
         particles.forEach(p => {
             p.positionCount = 0;
             p.trailIndex = 0;
@@ -342,7 +399,6 @@ visualsFolder.add(params, 'trailPersistence').name('Persist Trails (No Auto Clea
 });
 visualsFolder.open();
 
-// Presets folder
 const presetsFolder = gui.addFolder('Presets');
 presetsFolder.add({ Cyclotron: presetCyclotron }, 'Cyclotron');
 presetsFolder.add({ Cycloidal: presetCycloidal }, 'Cycloidal');
@@ -350,10 +406,8 @@ presetsFolder.add({ 'Straight Line': presetStraightLine }, 'Straight Line');
 presetsFolder.add({ 'Invert Charge Sign': invertChargeSign }, 'Invert Charge Sign');
 presetsFolder.open();
 
-// Export trajectories button
 gui.add({ Export: exportTrajectories }, 'Export').name('Export Trajectories (CSV)');
 
-// Pause and Reset buttons
 gui.add({ PauseResume: () => { isPaused = !isPaused; } }, 'PauseResume').name('Pause / Resume (space)');
 gui.add({ Reset: () => initializeSimulation(true) }, 'Reset').name('Reset (R)');
 
@@ -369,7 +423,6 @@ document.addEventListener('keydown', (event) => {
 });
 
 initializeSimulation(true);
-animate();
 
 function animate() {
     requestAnimationFrame(animate);
@@ -377,6 +430,7 @@ function animate() {
     if (!isPaused) updateSimulation();
     renderer.render(scene, camera);
 }
+
 
     
         
