@@ -1,15 +1,28 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Particle Simulation</title>
-    <style>
-        body { margin: 0; overflow: hidden; }
-        canvas { display: block; }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Particle in EM Field Simulation</title>
+  <style>
+    /* Make body and html take full screen and no scroll */
+    html, body {
+      margin: 0; 
+      height: 100%; 
+      overflow: hidden;
+      background-color: black; /* fallback background */
+    }
+    /* Canvas fills entire screen */
+    canvas {
+      display: block;
+    }
+  </style>
 </head>
 <body>
-    <script type="module" src="./main.js"></script>
+  <!-- The renderer will append its canvas here -->
+  
+  <!-- Load your main.js as a module -->
+  <script type="module" src="./main.js"></script>
 </body>
 </html>
+
