@@ -329,7 +329,6 @@ document.addEventListener('keydown', (event) => {
 initializeSimulation(true);
 animate();
 
-
     
         
                 
