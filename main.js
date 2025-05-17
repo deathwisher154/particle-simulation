@@ -18,14 +18,14 @@ const params = {
     gridDivisions: 20,
     lightIntensity: 1,
     lightColor: '#ffffff',
-    particleCount: 3,
+    particleCount: 1,    // Fixed to 1 particle only
     mass: 1.0,
     radius: 0.4,
     friction: 0.1,
     gravityX: 0.0, gravityY: -9.8, gravityZ: 0.0,
     externalForceX: 0.0, externalForceY: 0.0, externalForceZ: 0.0,
     backgroundColor: '#000000',
-    trailPersistence: true,  // Keep trails indefinitely if true
+    trailPersistence: true,
 };
 
 const baseDt = 0.01;
@@ -48,11 +48,10 @@ scene.add(new THREE.AmbientLight(0x404040));
 
 class Particle {
     constructor() {
-        // Start all particles at origin
         this.r = new THREE.Vector3(0, 0, 0);
         this.v = new THREE.Vector3(params.vx, params.vy, params.vz);
 
-        this.maxTrailPoints = 5000; // Longer trails
+        this.maxTrailPoints = 5000;
         this.positions = new Float32Array(this.maxTrailPoints * 3);
         this.positionCount = 0;
         this.trailIndex = 0;
@@ -169,12 +168,10 @@ function clearScene() {
 function createBetterAxes(size = 10) {
     const axesGroup = new THREE.Group();
 
-    // Thick colored axes lines
     const axisMaterialX = new THREE.LineBasicMaterial({ color: 0xff0000, linewidth: 3 });
     const axisMaterialY = new THREE.LineBasicMaterial({ color: 0x00ff00, linewidth: 3 });
     const axisMaterialZ = new THREE.LineBasicMaterial({ color: 0x0000ff, linewidth: 3 });
 
-    // Lines for X, Y, Z
     const xGeometry = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, 0), new THREE.Vector3(size, 0, 0)]);
     const xAxis = new THREE.Line(xGeometry, axisMaterialX);
     axesGroup.add(xAxis);
@@ -187,7 +184,6 @@ function createBetterAxes(size = 10) {
     const zAxis = new THREE.Line(zGeometry, axisMaterialZ);
     axesGroup.add(zAxis);
 
-    // Create text sprites for axis labels
     const createTextSprite = (text, color) => {
         const canvas = document.createElement('canvas');
         const size = 128;
@@ -279,7 +275,6 @@ function updateSimulation() {
     });
 }
 
-// Preset motions
 function presetCyclotron() {
     params.Ex = 0; params.Ey = 0; params.Ez = 0;
     params.Bx = 0; params.By = 0; params.Bz = 1;
@@ -349,7 +344,6 @@ function exportTrajectories() {
     URL.revokeObjectURL(url);
 }
 
-// GUI
 const gui = new GUI();
 
 const physicsFolder = gui.addFolder('Physics');
@@ -386,7 +380,6 @@ visualsFolder.add(params, 'show3DGrid').name('Show grid').onChange(() => {
 visualsFolder.addColor(params, 'backgroundColor').name('Background color').onChange(() => {
     scene.background.set(params.backgroundColor);
 });
-visualsFolder.add(params, 'particleCount', 1, 10, 1).name('Particle count').onFinishChange(() => initializeSimulation());
 visualsFolder.add(params, 'trailPersistence').name('Persist Trails (No Auto Clear)').onChange(() => {
     if (!params.trailPersistence) {
         particles.forEach(p => {
@@ -430,6 +423,7 @@ function animate() {
     if (!isPaused) updateSimulation();
     renderer.render(scene, camera);
 }
+
 
 
     
