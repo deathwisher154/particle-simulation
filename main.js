@@ -50,6 +50,7 @@ scene.add(dirLight);
 
 // Helper axes group (will be recreated)
 let axesHelper = null;
+let gridHelper = null; // <-- Add this line
 function createLabeledAxes(size = 10) {
   const group = new THREE.Group();
   const matX = new THREE.LineBasicMaterial({ color: 0xff0000 });
@@ -385,6 +386,18 @@ function animate() {
   renderer.render(scene, camera);
 }
 animate();
+
+
+
+
+
+
+
+
+
+
+
+
 
   
 
