@@ -1,6 +1,6 @@
-import * as THREE from 'https://cdn.skypack.dev/three@0.128.0';
-import { OrbitControls } from 'https://cdn.skypack.dev/three@0.128.0/examples/jsm/controls/OrbitControls.js';
-import { GUI } from 'https://cdn.skypack.dev/dat.gui@0.7.7';
+import * as THREE from 'https://esm.sh/three@0.128.0';
+import { OrbitControls } from 'https://esm.sh/three@0.128.0/examples/jsm/controls/OrbitControls.js';
+import { GUI } from 'https://esm.sh/dat.gui@0.7.7/build/dat.gui.module.js';
 
 // Parameters with initial defaults
 const params = {
@@ -355,10 +355,10 @@ visualFolder.addColor(params, 'backgroundColor').name('Background Color').onChan
 visualFolder.open();
 
 const presetFolder = gui.addFolder('Presets');
-presetFolder.add({Cyclotron: presetCyclotron}, 'Cyclotron');
-presetFolder.add({Cycloidal: presetCycloidal}, 'Cycloidal');
-presetFolder.add({StraightLine: presetStraightLine}, 'Straight Line');
-presetFolder.add({InvertCharge: invertChargeSign}, 'Invert Charge Sign');
+presetFolder.add({ Cyclotron: presetCyclotron }, 'Cyclotron').name('Cyclotron');
+presetFolder.add({ Cycloidal: presetCycloidal }, 'Cycloidal').name('Cycloidal');
+presetFolder.add({ StraightLine: presetStraightLine }, 'StraightLine').name('Straight Line');
+presetFolder.add({ InvertCharge: invertChargeSign }, 'InvertCharge').name('Invert Charge Sign');
 presetFolder.open();
 
 gui.add({PauseResume: () => { isPaused = !isPaused; }}, 'PauseResume').name('Pause / Resume (Space)');
