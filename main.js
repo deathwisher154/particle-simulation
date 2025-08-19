@@ -1,4 +1,5 @@
 // main.js
+
 import * as THREE from 'https://esm.sh/three@0.128.0';
 import { OrbitControls } from 'https://esm.sh/three@0.128.0/examples/jsm/controls/OrbitControls.js';
 import { GUI } from 'https://esm.sh/dat.gui@0.7.7/build/dat.gui.module.js';
@@ -78,6 +79,7 @@ function createLabeledAxes(size = 10) {
     const canvas = document.createElement('canvas');
     const S = 128;
     canvas.width = S; canvas.height = S;
+
     const ctx = canvas.getContext('2d');
     ctx.clearRect(0, 0, S, S);
     ctx.font = 'Bold 70px Arial';
@@ -85,6 +87,7 @@ function createLabeledAxes(size = 10) {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(text, S / 2, S / 2);
+
     const tex = new THREE.CanvasTexture(canvas);
     const sprMat = new THREE.SpriteMaterial({ map: tex, depthTest: false, depthWrite: false, transparent: true });
     const sprite = new THREE.Sprite(sprMat);
@@ -98,8 +101,8 @@ function createLabeledAxes(size = 10) {
   labelY.position.set(0, size + 0.7, 0);
   const labelZ = makeLabel('Z', '#0000ff');
   labelZ.position.set(0, 0, size + 0.7);
-
   group.add(labelX, labelY, labelZ);
+
   return group;
 }
 
@@ -129,6 +132,7 @@ function setGridVisibility(visible) {
   }
 }
 
+// Initialize helpers once
 setAxesVisibility(params.showAxes);
 setGridVisibility(params.showGrid);
 
@@ -164,7 +168,6 @@ class Particle {
     this.trail = new THREE.Line(this.trailGeometry, this.trailMaterial);
     this.trail.frustumCulled = false;
     this.trail.visible = showTrail;
-
     this.positionCount = 0;
     this.trailIndex = 0;
 
@@ -194,12 +197,12 @@ class Particle {
       // Reset when not persisting
       this.resetTrail();
     }
+
     // Write current position to circular buffer
     const i = this.trailIndex;
     this.positions[i * 3 + 0] = this.r.x;
     this.positions[i * 3 + 1] = this.r.y;
     this.positions[i * 3 + 2] = this.r.z;
-
     this.trailIndex = (this.trailIndex + 1) % this.maxTrailPoints;
     this.positionCount = Math.min(this.positionCount + 1, this.maxTrailPoints);
     this.trailGeometry.setDrawRange(0, this.positionCount);
@@ -236,21 +239,17 @@ function magneticField() {
 function computeCoulombForce(i) {
   const fi = new THREE.Vector3();
   const pi = particles[i];
-
   for (let j = 0; j < particles.length; j++) {
     if (i === j) continue;
     const pj = particles[j];
-
     const r_ji = new THREE.Vector3().subVectors(pi.r, pj.r); // r_i - r_j
     const dist2 = Math.max(r_ji.lengthSq(), SOFTENING * SOFTENING);
     const invDist = 1 / Math.sqrt(dist2);
     const invDist3 = invDist * invDist * invDist;
-
-    // F = k_e * q_i q_j * r_hat / r^2  => k_e*q_i*q_j * r_vec / r^3
+    // F = k_e * q_i q_j * r_vec / r^3
     const scalar = params.k_e * pi.q * pj.q * invDist3;
     fi.addScaledVector(r_ji, scalar);
   }
-
   return fi;
 }
 
@@ -258,24 +257,19 @@ function totalForce(i, vel) {
   const q = particles[i].q;
   const E = electricField();
   const B = magneticField();
-
   // Lorentz q(E + v x B)
   const vxB = new THREE.Vector3().crossVectors(vel, B);
   const lorentz = E.add(vxB).multiplyScalar(q);
-
   // Linear drag: -gamma * v (dimensionless for demo)
   const drag = vel.clone().multiplyScalar(-params.friction);
-
   // Coulomb interactions
   const coulomb = computeCoulombForce(i);
-
   return lorentz.add(drag).add(coulomb);
 }
 
 function rk4Step(i, r, v, dt) {
   if (params.mass === 0) throw new Error('Mass cannot be zero!');
   const invM = 1 / params.mass;
-
   const a = (vel) => totalForce(i, vel).multiplyScalar(invM);
 
   const k1r = v.clone();
@@ -351,10 +345,11 @@ function initializeSimulation(resetCamera = false, randomize = false) {
   setAxesVisibility(params.showAxes);
   setGridVisibility(params.showGrid);
 
-  // Create particles
+  // Dispose old particles
   particles.forEach(p => p.dispose());
   particles = [];
 
+  // Create particles
   const radius = 2.5;
   for (let i = 0; i < params.particleCount; i++) {
     const angle = (2 * Math.PI * i) / params.particleCount;
@@ -363,7 +358,6 @@ function initializeSimulation(resetCamera = false, randomize = false) {
       ? randomVelocity()
       : new THREE.Vector3(params.initVx, params.initVy, params.initVz);
     const charge = params.randomCharge ? randomCharge() : params.q;
-
     const p = new Particle(
       initPos, initVel, charge,
       params.radius,
@@ -372,7 +366,6 @@ function initializeSimulation(resetCamera = false, randomize = false) {
       params.showSpheres,
       params.showTrail
     );
-
     scene.add(p.mesh);
     scene.add(p.trail);
     p.resetTrail();
@@ -530,7 +523,6 @@ function updateSimulation(dt, nowSec) {
     const { dr, dv } = staged[i];
     p.r.add(dr);
     p.v.add(dv);
-
     if (params.showSpheres) p.mesh.position.copy(p.r);
     if (params.showTrail) p.updateTrail(params.trailPersistence);
     p.logTrajectory(nowSec);
@@ -566,3 +558,4 @@ function animate() {
 //
 initializeSimulation(true);
 animate();
+
