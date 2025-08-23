@@ -5,16 +5,18 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Advanced 3D Particle Simulation</title>
     <style>
-        body { margin: 0; overflow: hidden; background-color: #050510; color: white; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { margin: 0; overflow: hidden; background-color: #050510; color: white; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }
         canvas { display: block; }
         #info-overlay {
             position: absolute;
             top: 10px;
             left: 10px;
-            padding: 10px;
-            background: rgba(0, 0, 0, 0.3);
+            padding: 8px 12px;
+            background: rgba(0, 0, 0, 0.4);
             border-radius: 5px;
             pointer-events: none;
+            font-size: 14px;
+            line-height: 1.5;
         }
         #instructions {
             position: absolute;
@@ -23,6 +25,20 @@
             text-align: center;
             color: rgba(255, 255, 255, 0.5);
             pointer-events: none;
+            font-size: 12px;
+        }
+        #field-error {
+            position: absolute;
+            top: 10px;
+            right: 320px; /* Adjust based on GUI width */
+            padding: 10px;
+            background: #e55039;
+            color: white;
+            border-radius: 5px;
+            display: none; /* Hidden by default */
+            max-width: 300px;
+            font-size: 13px;
+            font-family: monospace;
         }
     </style>
 </head>
@@ -34,6 +50,7 @@
     <div id="instructions">
         Press [Space] to Pause/Resume | Press [R] to Reset
     </div>
+    <div id="field-error"></div>
 
     <script type="importmap">
     {
@@ -44,9 +61,11 @@
         }
     }
     </script>
+
     <script type="module" src="main.js"></script>
 </body>
 </html>
+
 
 
 
