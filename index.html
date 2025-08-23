@@ -1,23 +1,52 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Charged Particle Simulation</title>
-  <style>
-    html, body {
-      margin: 0; height: 100%; overflow: hidden; background-color: black;
-    }
-    canvas {
-      display: block;
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advanced 3D Particle Simulation</title>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #050510; color: white; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        canvas { display: block; }
+        #info-overlay {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            padding: 10px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 5px;
+            pointer-events: none;
+        }
+        #instructions {
+            position: absolute;
+            bottom: 10px;
+            width: 100%;
+            text-align: center;
+            color: rgba(255, 255, 255, 0.5);
+            pointer-events: none;
+        }
+    </style>
 </head>
 <body>
-  <script type="module" src="./main.js"></script>
+    <div id="info-overlay">
+        <div>Time: <span id="time-display">0.00</span>s</div>
+        <div>Status: <span id="status-display">Running</span></div>
+    </div>
+    <div id="instructions">
+        Press [Space] to Pause/Resume | Press [R] to Reset
+    </div>
+
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://esm.sh/three@0.160.0",
+            "three/addons/": "https://esm.sh/three@0.160.0/examples/jsm/",
+            "lil-gui": "https://esm.sh/lil-gui@0.19.1"
+        }
+    }
+    </script>
+    <script type="module" src="main.js"></script>
 </body>
 </html>
-
 
 
 
