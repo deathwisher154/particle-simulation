@@ -1,13 +1,14 @@
-import * as THREE from 'three';
 import { ParticleSystem } from './particle.js';
 import { Physics } from './physics.js';
 import { PARAMS, CONSTANTS } from './config.js';
 import { setAxesVisibility, setGridVisibility } from './visuals.js';
-import { updateInfoGUI, updateChargeGUI } from './gui.js';
+import { updateChargeGUI, updateInfoGUI } from './gui.js';
 
 export class Simulation {
-    constructor(scene) {
+    constructor(scene, camera, controls) {
         this.scene = scene;
+        this.camera = camera;
+        this.controls = controls;
         this.isPaused = false;
         this.totalTimeSec = 0;
         this.lastTimeSec = performance.now() / 1000;
@@ -15,16 +16,17 @@ export class Simulation {
         this.timeDisplay = document.getElementById('time-display');
         this.statusDisplay = document.getElementById('status-display');
         
-        this.initialize(true);
+        this.initialize({ resetCamera: true });
     }
 
-    initialize(resetCamera = false) {
+    initialize({ resetCamera = false, randomizeVelocities = false } = {}) {
         if (this.particleSystem) {
             this.particleSystem.dispose();
         }
         
-        this.particleSystem = new ParticleSystem(this.scene);
+        this.particleSystem = new ParticleSystem(this.scene, randomizeVelocities);
         this.totalTimeSec = 0;
+        this.lastTimeSec = performance.now() / 1000;
 
         setAxesVisibility(this.scene, PARAMS.visuals.showAxes);
         setGridVisibility(this.scene, PARAMS.visuals.showGrid);
@@ -33,7 +35,8 @@ export class Simulation {
         updateInfoGUI(this.particleSystem.particles);
         
         if (resetCamera) {
-            // Placeholder for camera reset logic if needed
+            this.camera.position.set(0, 0, 25);
+            this.controls.target.set(0, 0, 0);
         }
     }
 
@@ -53,15 +56,16 @@ export class Simulation {
         this.totalTimeSec += dt;
 
         try {
+            // Staging avoids order-dependence in multi-particle calculations like Coulomb force
             const stagedUpdates = this.particleSystem.particles.map((p, i) =>
                 Physics.rk4Step(i, p, dt, this.totalTimeSec, this.particleSystem.particles)
             );
             
-            this.particleSystem.update(stagedUpdates);
+            this.particleSystem.applyUpdates(stagedUpdates);
             this.updateUI();
 
         } catch (e) {
-            this.isPaused = true;
+            this.togglePause();
             console.error("Simulation error:", e);
             alert(`Simulation paused due to a runtime error: ${e.message}`);
         }
@@ -69,10 +73,11 @@ export class Simulation {
     
     updateUI() {
         this.timeDisplay.textContent = this.totalTimeSec.toFixed(2);
+        // The 'infoFolder' is imported from gui.js and checked for existence
         if (PARAMS.physics.useRelativity && infoFolder) {
             this.particleSystem.particles.forEach((p, i) => {
-                if (infoFolder.__controllers[i]) {
-                    infoFolder.__controllers[i].setValue(p.gamma.toFixed(3));
+                if (infoFolder.controllers[i]) {
+                    infoFolder.controllers[i].setValue(p.gamma.toFixed(3));
                 }
             });
         }
