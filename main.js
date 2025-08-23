@@ -7,7 +7,7 @@ import { PARAMS } from './config.js';
 class App {
     constructor() {
         this.setupScene();
-        this.simulation = new Simulation(this.scene);
+        this.simulation = new Simulation(this.scene, this.camera, this.controls);
         this.gui = createGUI(this.simulation);
         this.addEventListeners();
         this.animate();
@@ -17,10 +17,10 @@ class App {
         this.scene = new THREE.Scene();
         this.scene.background = new THREE.Color(PARAMS.visuals.backgroundColor);
 
-        this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-        this.camera.position.set(0, 0, 20);
+        this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 2000);
+        this.camera.position.set(0, 0, 25);
 
-        this.renderer = new THREE.WebGLRenderer({ antialias: true });
+        this.renderer = new THREE.WebGLRenderer({ antias: true });
         this.renderer.setPixelRatio(window.devicePixelRatio);
         this.renderer.setSize(window.innerWidth, window.innerHeight);
         document.body.appendChild(this.renderer.domElement);
@@ -28,18 +28,19 @@ class App {
         this.controls = new OrbitControls(this.camera, this.renderer.domElement);
         this.controls.enableDamping = true;
 
-        this.scene.add(new THREE.AmbientLight(0x404040, 2.5));
-        this.dirLight = new THREE.DirectionalLight(0xffffff, 1.5);
-        this.dirLight.position.set(5, 10, 7);
+        this.scene.add(new THREE.AmbientLight(0xcccccc, 0.8));
+        this.dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
+        this.dirLight.position.set(5, 10, 7.5);
         this.scene.add(this.dirLight);
     }
 
     addEventListeners() {
         window.addEventListener('resize', () => this.onWindowResize());
         document.addEventListener('keydown', e => {
+            // Ignore key presses when typing in a GUI input
             if (e.target.tagName.toLowerCase() === 'input') return;
             if (e.code === 'Space') { e.preventDefault(); this.simulation.togglePause(); }
-            if (e.code === 'KeyR') { e.preventDefault(); this.simulation.initialize(true); }
+            if (e.code === 'KeyR') { e.preventDefault(); this.simulation.initialize({ resetCamera: true }); }
         });
     }
 
@@ -57,6 +58,10 @@ class App {
 
         this.renderer.render(this.scene, this.camera);
     }
+}
+
+// Launch the application
+new App();
 }
 
 // Launch the application
