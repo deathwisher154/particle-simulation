@@ -1,37 +1,62 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta
-      name="viewport"
-      content="width=device-width, initial-scale=1, viewport-fit=cover"
-    />
-    <title>Charged-Particle Simulator</title>
-    <style>
-      /* Make the canvas fill the viewport with no scrollbars */
-      html, body {
-        margin: 0;
-        padding: 0;
-        height: 100%;
-        overflow: hidden;
-        background: #000; /* optional; your JS sets scene background */
-      }
-      /* If you later add a container, ensure it fills the page */
-      #app {
-        width: 100%;
-        height: 100%;
-      }
-    </style>
-  </head>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>3D Particle Simulation</title>
+  <style>
+    html,body { height:100%; margin:0; background:#050510; }
+    #root { width:100%; height:100vh; overflow:hidden; }
+    .overlay {
+      position: fixed;
+      left: 12px; bottom: 12px;
+      background: rgba(0,0,0,0.45);
+      color: #fff;
+      padding: 10px 12px;
+      border-radius: 8px;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+      font-size: 13px;
+      line-height: 1.4;
+      backdrop-filter: blur(4px);
+      z-index: 9999;
+    }
+    .overlay b { color:#ffd36b; }
+    a.help { color: #8be9fd; text-decoration: none; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
 
-  <body>
-    <!-- Optional container if you prefer not to append directly to body -->
-    <div id="app"></div>
+  <div class="overlay" id="help">
+    <div><b>Simulation controls</b></div>
+    <div>Orbit: mouse drag • Zoom: scroll • Pause/resume: <b>Space</b> • Reset: <b>R</b></div>
+    <div style="margin-top:6px;font-size:12px;color:#ddd;">
+      The GUI (dat.gui) is on the top-right. Use presets to quickly try examples.
+    </div>
+  </div>
 
-    <!-- Load your Three.js app as an ES module -->
-    <script type="module" src="./main.js"></script>
-  </body>
+  <!--
+    IMPORTANT:
+      * Place your JS file (the file you uploaded) next to this HTML.
+      * Recommended filename: main.js
+      * If your file is named exactly "main (4).js", change the src below to "./main%20(4).js"
+      * Because the script uses ES module imports (from esm.sh), you must serve the folder
+        from a local web server (do NOT open via file://). Example servers:
+          - python 3.x:  python -m http.server 8000
+          - node:          npx http-server .
+  -->
+
+  <!-- If you renamed your uploaded file to main.js, use this: -->
+  <script type="module" src="./main.js"></script>
+
+  <!-- If you kept the original name "main (4).js", use this instead (URL-encoded):
+  <script type="module" src="./main%20(4).js"></script>
+  -->
+
+</body>
 </html>
+
+
 
 
 
